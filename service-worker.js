@@ -1,3 +1,47 @@
+importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js');
+
+firebase.initializeApp({
+  apiKey: "AIzaSyDbz8brr9j2GNecv7Ghy1Z3pD45gYEZ1JE",
+  authDomain: "leadflowcrmm.firebaseapp.com",
+  projectId: "leadflowcrmm",
+  storageBucket: "leadflowcrmm.firebasestorage.app",
+  messagingSenderId: "95810310901",
+  appId: "1:95810310901:web:f1536ac4453b755344ebbc"
+});
+
+const messaging = firebase.messaging();
+
+messaging.onBackgroundMessage((payload) => {
+  console.log('[firebase-messaging-sw.js] Received background message ', payload);
+  const notificationTitle = payload.notification.title;
+  const notificationOptions = {
+    body: payload.notification.body,
+    icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏰</text></svg>'
+  };
+
+  self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then((windowClients) => {
+      // Check if there is already a window/tab open with the target URL
+      for (let i = 0; i < windowClients.length; i++) {
+        let client = windowClients[i];
+        if (client.url.includes("LeadFlow_3_8_2_Supabase.html") && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // If not, open a new window
+      if (clients.openWindow) {
+        return clients.openWindow('./LeadFlow_3_8_2_Supabase.html');
+      }
+    })
+  );
+});
+
 const CACHE_NAME = 'leadflow-cache-v1';
 const ASSETS_TO_CACHE = [
   './LeadFlow_3_8_2_Supabase.html',

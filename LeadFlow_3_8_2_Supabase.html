@@ -10,6 +10,11 @@
     <script type="module" src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    
+    <!-- Firebase SDK (FCM) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js"></script>
+    
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#6366F1">
     <style>
@@ -1847,7 +1852,159 @@ body.dark .dark-toggle.on .dt-thumb { left:23px; background:#e0e7ff; }
         .digest-trigger-btn:hover { background:var(--bg2); color:var(--text); }
         body.dark .digest-trigger-btn { background:var(--bg2); border-color:var(--border2); }
         body.dark .digest-trigger-btn:hover { background:var(--bg3); }
-    
+
+        /* ═══════════════════════════════════════════
+           MOBILE UI OPTIMIZATION & FCM ELEMENTS
+        ═══════════════════════════════════════════ */
+        .bottom-nav { display: none; }
+        .fcm-sheet {
+            position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg2);
+            border-radius: 24px 24px 0 0; padding: 24px; box-shadow: 0 -10px 40px rgba(0,0,0,0.15);
+            z-index: 10000; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+            max-height: 80vh; overflow-y: auto;
+        }
+        .fcm-sheet.active { transform: translateY(0); }
+        body.dark .fcm-sheet { background: #111318; border-top: 1px solid var(--border2); }
+
+        /* Sync Overlay */
+        .sync-progress-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+            z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        .sync-progress-overlay.active { opacity: 1; pointer-events: all; }
+        .spo-card { background: var(--bg2); padding: 30px; border-radius: 20px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.2); max-width: 300px; width: 90%; }
+        body.dark .spo-card { background: #111318; border: 1px solid var(--border2); }
+
+        @media (max-width: 768px) {
+            /* Layout & Nav */
+            .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+            .sidebar { display: none; }
+            .bottom-nav { 
+                display: flex; position: fixed; bottom: 0; left: 0; right: 0; 
+                background: var(--bg2); border-top: 1px solid var(--border2); 
+                z-index: 1000; justify-content: space-around; padding-bottom: max(env(safe-area-inset-bottom), 8px);
+                box-shadow: 0 -4px 12px rgba(0,0,0,0.05); padding-top: 6px;
+            }
+            body.dark .bottom-nav { background: rgba(8,9,14,0.95); backdrop-filter: blur(10px); }
+            .bn-item { 
+                display: flex; flex-direction: column; align-items: center; justify-content: center; 
+                color: var(--muted); cursor: pointer; flex: 1; text-decoration: none; 
+                min-height: 48px; transition: color 0.15s; background: transparent; border: none;
+            }
+            .bn-item i { font-size: 22px; margin-bottom: 2px; }
+            .bn-item span { font-size: 10px; font-weight: 600; }
+            .bn-item.active { color: var(--violet); }
+            .bn-item.active i { font-family: 'Phosphor-Fill'; }
+            
+            .workspace { padding: 16px 16px 90px; }
+            
+            /* Topbar */
+            .topbar { padding: 0 14px; position: sticky; top: 0; z-index: 100; left: 0; }
+            .bt-logo-rect span { display: none; }
+            .bt-page-label { font-size: 16px; font-weight: 800; }
+            .search-wrap, .sync-wrap, .dark-toggle, .topbar .btn.primary { display: none !important; }
+            .topbar-right { gap: 12px; }
+            .notif-wrap { display: block; }
+            
+            /* Tap targets */
+            .btn, .tb-btn, .vt-btn, input, select, textarea { min-height: 48px; }
+            .tb-btn { width: 48px; height: 48px; }
+            .sync-btn { border-radius: 8px; min-height: 40px; padding: 0 10px; }
+            
+            /* Dash Hero & Metrics */
+            .dash-hero { flex-direction: column; padding: 20px; text-align: center; }
+            .pipeline-hero { width: 100%; text-align: center; padding: 24px; }
+            .ph-weighted { justify-content: center; margin-top: 10px; }
+            .metrics-grid-6 { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .metrics-grid-6 .m-card { padding: 16px; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+            .dash-grid { grid-template-columns: 1fr; }
+            
+            /* Tables to Cards */
+            .table-wrap { background: transparent; border: none; padding: 0; box-shadow: none; border-radius: 0; overflow-x: visible; }
+            table, thead, tbody, th, td, tr { display: block; width: 100%; }
+            thead tr { position: absolute; top: -9999px; left: -9999px; }
+            tr { 
+                background: var(--bg2); border: 1px solid var(--border2); 
+                border-radius: 12px; margin-bottom: 12px; padding: 14px; 
+                box-shadow: var(--shadow); position: relative;
+            }
+            tr td { 
+                border: none; padding: 6px 0; display: flex; align-items: center; 
+                justify-content: space-between; font-size: 13px; text-align: right; border-bottom: 1px solid var(--border);
+            }
+            tr td:last-child { border-bottom: none; }
+            tr td::before { flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-right: auto; padding-right:10px; }
+            
+            /* Lead Table Specifics */
+            #leads-tbody tr td { min-height: 40px; }
+            #leads-tbody tr td:nth-child(1) { position: absolute; top: 14px; right: 14px; width: auto; padding: 0; border:none; }
+            #leads-tbody tr td:nth-child(2) { padding-top: 0; padding-bottom: 12px; flex-direction: row; justify-content: flex-start; text-align: left; border-bottom: 2px solid var(--border); margin-bottom: 6px; }
+            #leads-tbody tr td:nth-child(2)::before { display: none; } 
+            #leads-tbody tr td:nth-child(3)::before { content: "Stage"; }
+            #leads-tbody tr td:nth-child(4)::before { content: "Score"; }
+            #leads-tbody tr td:nth-child(5)::before { content: "Type"; }
+            #leads-tbody tr td:nth-child(6)::before { content: "Region"; }
+            #leads-tbody tr td:nth-child(7)::before { content: "Deal Value"; }
+            #leads-tbody tr td:nth-child(8)::before { content: "Next FU"; }
+            #leads-tbody tr td:nth-child(9)::before { content: "Tags"; }
+            #leads-tbody tr td:nth-child(10) { display: none; }
+
+            /* Vendors Table */
+            #vend-all-tbody tr, #vend-approved-tbody tr { padding-bottom: 60px; }
+            #vend-all-tbody tr td { min-height: 40px; }
+            #vend-all-tbody tr td:nth-child(1) { position: absolute; top: 14px; right: 14px; width: auto; padding: 0; border:none; }
+            #vend-all-tbody tr td:nth-child(2) { padding-top: 0; padding-bottom: 12px; flex-direction: row; justify-content: flex-start; text-align: left; border-bottom: 2px solid var(--border); margin-bottom: 6px;}
+            #vend-all-tbody tr td:nth-child(2)::before { display: none; }
+            #vend-all-tbody tr td:nth-child(3)::before { content: "Platform"; }
+            #vend-all-tbody tr td:nth-child(4)::before { content: "Region"; }
+            #vend-all-tbody tr td:nth-child(5)::before { content: "Status"; }
+            #vend-all-tbody tr td:nth-child(6)::before { content: "Applied"; }
+            #vend-all-tbody tr td:nth-child(7)::before { content: "Renewal"; }
+            #vend-all-tbody tr td:nth-child(8) { display:block; padding:12px 0; text-align:left; }
+            #vend-all-tbody tr td:nth-child(8)::before { content: "Documents"; display:block; margin-bottom:8px; }
+            #vend-all-tbody tr td:nth-child(9) { display:flex; justify-content:flex-end; }
+            #vend-all-tbody tr td:nth-child(9)::before { content: "Links"; }
+            #vend-all-tbody tr td:nth-child(10) { text-align:left; display:block; }
+            #vend-all-tbody tr td:nth-child(10)::before { content: "Notes"; display:block; margin-bottom:4px; }
+            #vend-all-tbody tr td:nth-child(11) { position:absolute; bottom:14px; left:14px; right:14px; padding:0; justify-content:space-between; border:none; border-top: 1px solid var(--border); padding-top:14px; margin-top:10px; }
+            
+            /* Modals to Bottom Sheets */
+            .overlay { align-items: flex-end; padding: 0; }
+            .modal { 
+                width: 100%; max-width: 100%; border-radius: 24px 24px 0 0; 
+                margin: 0; max-height: 90vh; overflow-y: auto; padding: 24px;
+                transform: translateY(100%); animation: slideUpSheet 0.35s cubic-bezier(0.16,1,0.3,1) forwards;
+            }
+            .modal::before {
+                content:''; width: 40px; height: 5px; background: var(--border2);
+                border-radius: 3px; position:absolute; top: 10px; left: 50%; transform:translateX(-50%);
+            }
+            @keyframes slideUpSheet { from{transform:translateY(100%);} to{transform:translateY(0);} }
+            .panel { width: 100%; border-radius: 20px 20px 0 0; transform: translateY(100%); animation: slideUpSheet 0.3s forwards; max-width:100%; }
+            .panel::before {
+                content:''; width: 40px; height: 5px; background: var(--border2);
+                border-radius: 3px; position:absolute; top: 10px; left: 50%; transform:translateX(-50%);
+            }
+            
+            /* Forms & Filters */
+            .form-row { flex-direction: column; gap: 14px; }
+            .vt { width: 100%; flex-wrap: wrap; }
+            .vt-btn { flex: 1; justify-content: center; }
+            .filter-bar { padding: 12px; gap: 10px; }
+            .filter-sel { flex: 1; text-align: center; }
+            .pipeline-strip { flex-wrap: wrap; justify-content: space-around; padding: 16px; gap: 16px 8px; }
+            .ps-sep { display: none; }
+            .ps-item { width: 45%; }
+            
+            /* Hide unused table elements and adjust kanban */
+            .k-col { width: 280px; }
+            .kanban-scroll { scroll-snap-type: x mandatory; }
+            .k-col { scroll-snap-align: start; }
+            
+            .act-type-row { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 8px; }
+            .act-type-btn { flex-shrink: 0; }
+        }
     </style>
 </head>
 <body>
@@ -1910,6 +2067,26 @@ body.dark .dark-toggle.on .dt-thumb { left:23px; background:#e0e7ff; }
             </div>
         </div>
     </aside>
+
+    <!-- ═══════ BOTTOM NAV (MOBILE) ═══════ -->
+    <nav class="bottom-nav">
+        <button class="bn-item active" data-target="dashboard" onclick="navTo('dashboard')">
+            <i class="ph ph-house-simple"></i>
+            <span>Dashboard</span>
+        </button>
+        <button class="bn-item" data-target="leads" onclick="navTo('leads')">
+            <i class="ph ph-users-three"></i>
+            <span>Leads</span>
+        </button>
+        <button class="bn-item" data-target="vendors" onclick="navTo('vendors')">
+            <i class="ph ph-buildings"></i>
+            <span>Vendors</span>
+        </button>
+        <button class="bn-item" data-target="scratchpad" onclick="navTo('scratchpad')">
+            <i class="ph ph-note-pencil"></i>
+            <span>Scratchpad</span>
+        </button>
+    </nav>
 
     <!-- ═══════ TOPBAR ═══════ -->
     <header class="topbar">
@@ -2401,6 +2578,24 @@ body.dark .dark-toggle.on .dt-thumb { left:23px; background:#e0e7ff; }
         </section>
 
     </main>
+</div>
+
+<!-- Sync Progress Overlay -->
+<div id="sync-progress-overlay" class="sync-progress-overlay">
+    <div class="spo-card">
+        <div style="width:44px; height:44px; border:3px solid rgba(139,92,246,0.2); border-top-color:var(--violet); border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px;"></div>
+        <div id="spo-title" style="font-size:16px; font-weight:800; color:var(--text); margin-bottom:6px;">Syncing Database</div>
+        <div id="spo-step" style="font-size:13px; color:var(--sub); font-weight:600;">Step 1/3 — Connecting...</div>
+    </div>
+</div>
+
+<!-- FCM Due Leads Sheet -->
+<div class="global-overlay" id="fcm-overlay" style="display:none;" onclick="closeFCMSheet()"></div>
+<div id="fcm-sheet" class="fcm-sheet">
+    <div style="width: 40px; height: 5px; background: var(--border2); border-radius: 3px; margin: 0 auto 20px;"></div>
+    <div style="font-size:18px; font-weight:800; color:var(--text); margin-bottom:4px;">Follow-up Due</div>
+    <div style="font-size:13px; color:var(--sub); margin-bottom:20px;">Leads requiring your immediate attention.</div>
+    <div id="fcm-leads-list" style="display:flex; flex-direction:column; gap:12px;"></div>
 </div>
 
 <!-- ═══ OVERLAY ═══ -->
@@ -2992,6 +3187,27 @@ const SUPA_URL = 'https://heiubgxatorsptiyvtbe.supabase.co';
 const SUPA_KEY = 'sb_publishable_KyGu0csNxkl6ogTN58y-xQ_y3qPTAP7';
 const db = supabase.createClient(SUPA_URL, SUPA_KEY);
 
+// ══════════════════════════════════════════════════
+//  FIREBASE CONFIG (FCM)
+// ══════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyDbz8brr9j2GNecv7Ghy1Z3pD45gYEZ1JE",
+  authDomain: "leadflowcrmm.firebaseapp.com",
+  projectId: "leadflowcrmm",
+  storageBucket: "leadflowcrmm.firebasestorage.app",
+  messagingSenderId: "95810310901",
+  appId: "1:95810310901:web:f1536ac4453b755344ebbc"
+};
+firebase.initializeApp(firebaseConfig);
+const messaging = firebase.messaging();
+
+// Foreground message handler
+messaging.onMessage((payload) => {
+  console.log('Message received. ', payload);
+  showToast(`Reminder: ${payload.notification.title}`, 'success');
+  if(typeof checkNotifications === 'function') checkNotifications();
+});
+
 // ── Convert JS lead object → DB row ──
 function leadToRow(l) {
     return {
@@ -3360,47 +3576,120 @@ function initNotifications() {
             Notification.requestPermission();
         }
     }
-    document.getElementById('notif-btn').onclick = () => {
-        if("Notification" in window) Notification.requestPermission().then(p => {
-            showToast(p === 'granted' ? 'Alerts enabled!' : 'Alerts blocked.', p==='granted'?'success':'error');
-        });
-        checkNotifications(true); // manual check
-    };
     
-    // Check every 1 minute
-    setInterval(checkNotifications, 60000);
+    const notifBtn = document.getElementById('notif-btn');
+    if(notifBtn) {
+        notifBtn.onclick = () => {
+            if("Notification" in window && Notification.permission !== "granted") {
+                Notification.requestPermission().then(p => {
+                    showToast(p === 'granted' ? 'Alerts enabled!' : 'Alerts blocked.', p==='granted'?'success':'error');
+                    if(p === 'granted') openFCMSheet();
+                });
+            } else {
+                openFCMSheet();
+            }
+        };
+    }
+    
+    // Check immediately on load
+    checkNotifications();
+    
+    // Check every hour just in case date rolls over
+    setInterval(checkNotifications, 3600000);
 }
 
-let notifiedIds = new Set();
-function checkNotifications(manual = false) {
-    if (!("Notification" in window) || Notification.permission !== "granted") return;
+function checkNotifications() {
     const now = new Date();
+    now.setHours(0,0,0,0);
     
-    state.leads.forEach(l => {
-        if(l.stage === 'Won' || l.stage === 'Lost' || !l.nextFU) return;
-        
-        let targetTime = new Date(l.nextFU); // YYYY-MM-DD
-        const timeStr = state.reminders[l.id] || "10:00"; // default 10 AM
-        const [hh, mm] = timeStr.split(':').map(Number);
-        targetTime.setHours(hh || 10, mm || 0, 0, 0);
-
-        const diffMinutes = (targetTime - now) / 60000;
-        
-        // Notify if exactly 1 hour before, or if it's due now, or if it's 2 days before 10 AM.
-        // For simplicity, interval runs every 1m. We check if diff is within 0 to 2 minutes, or exact 60 mins.
-        if((diffMinutes > 0 && diffMinutes <= 2) || (diffMinutes > 59 && diffMinutes <= 61)) {
-            const notifKey = l.id + '_' + targetTime.getTime() + (diffMinutes > 10 ? '_1hr' : '_now');
-            if(!notifiedIds.has(notifKey)) {
-                notifiedIds.add(notifKey);
-                new Notification(`LeadFlow Reminder: ${l.name}`, {
-                    body: `Follow-up due ${diffMinutes > 10 ? 'in 1 hour' : 'now'}.\nCompany: ${l.comp}`,
-                    icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏰</text></svg>'
-                });
-                if(!manual) showToast(`Reminder: Follow-up with ${l.name}`, 'success');
-            }
+    const overdueLeads = state.leads.filter(l => {
+        if(l.stage === 'Won' || l.stage === 'Lost' || !l.nextFU) return false;
+        const d = new Date(l.nextFU); d.setHours(0,0,0,0);
+        return d <= now;
+    });
+    
+    // Update Badge
+    const badge = document.getElementById('notif-badge');
+    if(badge) {
+        if(overdueLeads.length > 0) {
+            badge.textContent = overdueLeads.length;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+    
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    
+    // Fire local notifications
+    const notifiedHistory = JSON.parse(localStorage.getItem('lf2-notified') || '{}');
+    const todayStr = new Date().toISOString().split('T')[0];
+    let triggeredCount = 0;
+    
+    overdueLeads.forEach(l => {
+        const key = `${l.id}_${todayStr}`;
+        if(!notifiedHistory[key]) {
+            notifiedHistory[key] = true;
+            triggeredCount++;
+            new Notification(`Follow-up Due: ${l.name}`, {
+                body: `${l.comp} — Deal Value: $${formatUSD(l.dealValue)}\nStage: ${l.stage}`,
+                icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏰</text></svg>',
+                tag: l.id
+            });
         }
     });
-    if(manual) showToast('Checked for upcoming reminders');
+    
+    localStorage.setItem('lf2-notified', JSON.stringify(notifiedHistory));
+}
+
+function openFCMSheet() {
+    const list = document.getElementById('fcm-leads-list');
+    if(!list) return;
+    
+    const now = new Date();
+    now.setHours(0,0,0,0);
+    const overdueLeads = state.leads.filter(l => {
+        if(l.stage === 'Won' || l.stage === 'Lost' || !l.nextFU) return false;
+        const d = new Date(l.nextFU); d.setHours(0,0,0,0);
+        return d <= now;
+    });
+    
+    if(overdueLeads.length === 0) {
+        list.innerHTML = `<div style="text-align:center;color:var(--sub);font-size:13px;padding:20px;">No pending follow-ups! 🎉</div>`;
+    } else {
+        list.innerHTML = overdueLeads.map(l => `
+            <div style="background:var(--bg); border:1px solid var(--border2); border-radius:12px; padding:14px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="navToLeadFromFCM('${l.id}')">
+                <div>
+                    <div style="font-weight:700; font-size:14.5px; color:var(--text); margin-bottom:2px;">${l.name}</div>
+                    <div style="font-size:12.5px; color:var(--sub);">${l.comp} • <span style="font-weight:600; color:var(--orange);">${l.stage}</span></div>
+                </div>
+                <div style="width:36px; height:36px; border-radius:10px; background:rgba(37,99,235,0.1); color:var(--blue); display:flex; align-items:center; justify-content:center;">
+                    <i class="ph-bold ph-arrow-right"></i>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    document.getElementById('fcm-overlay').style.display = 'block';
+    setTimeout(() => {
+        document.getElementById('fcm-sheet').classList.add('active');
+    }, 10);
+    
+    // Refresh badge as well
+    checkNotifications();
+}
+
+function closeFCMSheet() {
+    document.getElementById('fcm-sheet').classList.remove('active');
+    setTimeout(() => {
+        document.getElementById('fcm-overlay').style.display = 'none';
+    }, 300);
+}
+
+function navToLeadFromFCM(id) {
+    closeFCMSheet();
+    navTo('channels'); // Ensure we are on leads view
+    setTimeout(() => openLeadDetails(id), 350);
 }
 
 
@@ -3430,27 +3719,56 @@ async function saveState(changedLead, changedVendor) {
     }
 }
 
+function showSyncOverlay(title) {
+    document.getElementById('spo-title').textContent = title;
+    document.getElementById('spo-step').textContent = 'Step 1/3 — Connecting to Supabase...';
+    document.getElementById('sync-progress-overlay').classList.add('active');
+}
+function updateSyncOverlay(stepMsg) {
+    document.getElementById('spo-step').textContent = stepMsg;
+}
+function hideSyncOverlay() {
+    document.getElementById('sync-progress-overlay').classList.remove('active');
+}
+
 async function pushData() {
     if(!navigator.onLine) {
         showToast('Cannot push while offline.', 'error');
         return;
     }
     if(isSyncing) return;
+    
+    const btns = document.querySelectorAll('.sync-btn');
+    const pushBtn = btns[0];
+    if(pushBtn) { pushBtn.innerHTML = '<div style="width:16px;height:16px;border:2px solid var(--muted);border-top-color:var(--text);border-radius:50%;animation:spin 0.8s linear infinite;"></div>'; pushBtn.disabled = true; }
+    
     isSyncing = true;
     updateSyncDot('connecting');
+    showSyncOverlay('Pushing to Database');
+    
     try {
+        await new Promise(r => setTimeout(r, 600)); // UI pacing
+        updateSyncOverlay(`Step 2/3 — Syncing ${state.leads.length + state.vendors.length} records...`);
+        
         for(const l of state.leads) await dbSaveLead(l);
         for(const v of state.vendors) await dbSaveVendor(v);
         await dbSaveReminders();
+        
+        updateSyncOverlay('Step 3/3 — Done! ✅');
+        await new Promise(r => setTimeout(r, 600));
+        
         hasUnsaved = false;
         localStorage.removeItem('lf2-unsaved');
         updateSyncDot('online');
-        showToast('All changes pushed to Cloud!', 'success');
+        showToast(`Successfully synced ${state.leads.length + state.vendors.length} records ✅`, 'success');
     } catch(err) {
-        showToast('Push failed. Try again.', 'error');
+        showToast('Push failed: ' + err.message, 'error');
         hasUnsaved = true;
     }
+    
+    hideSyncOverlay();
     isSyncing = false;
+    if(pushBtn) { pushBtn.innerHTML = '<i class="ph-bold ph-upload-simple"></i>'; pushBtn.disabled = false; }
 }
 
 async function pullData(manual = false) {
@@ -3459,11 +3777,19 @@ async function pullData(manual = false) {
         return;
     }
     if(isSyncing) return;
+    
+    const btns = document.querySelectorAll('.sync-btn');
+    const pullBtn = btns[1];
+    
+    if(manual && pullBtn) { pullBtn.innerHTML = '<div style="width:16px;height:16px;border:2px solid var(--muted);border-top-color:var(--text);border-radius:50%;animation:spin 0.8s linear infinite;"></div>'; pullBtn.disabled = true; }
+    
     isSyncing = true;
     updateSyncDot('connecting');
-    if(manual) showLoader('Pulling from Cloud...');
+    if(manual) showSyncOverlay('Pulling from Database');
     
     try {
+        if(manual) { await new Promise(r => setTimeout(r, 600)); updateSyncOverlay('Step 2/3 — Fetching records...'); }
+        
         const { data: leadsData } = await db.from('leads').select('*').order('updated_at', { ascending: false });
         const { data: vendorsData } = await db.from('vendors').select('*').order('created_at', { ascending: false });
         const { data: remData } = await db.from('settings').select('value').eq('key','reminders').maybeSingle();
@@ -3486,12 +3812,21 @@ async function pullData(manual = false) {
         hasUnsaved = false;
         localStorage.removeItem('lf2-unsaved');
         updateSyncDot('online');
-        if(manual) { hideLoader(); showToast('Data loaded from Cloud!', 'success'); renderAll(); }
+        
+        if(manual) { 
+            updateSyncOverlay('Step 3/3 — Done! ✅');
+            await new Promise(r => setTimeout(r, 600));
+            showToast(`Successfully pulled ${state.leads.length + state.vendors.length} records ✅`, 'success'); 
+            renderAll(); 
+        }
     } catch(err) {
-        if(manual) { hideLoader(); showToast('Pull failed.', 'error'); }
+        if(manual) { showToast('Pull failed: ' + err.message, 'error'); }
         hasUnsaved = true;
     }
+    
+    if(manual) hideSyncOverlay();
     isSyncing = false;
+    if(manual && pullBtn) { pullBtn.innerHTML = '<i class="ph-bold ph-download-simple"></i>'; pullBtn.disabled = false; }
 }
 
 // ─── REGION FILTER SYNC ───
